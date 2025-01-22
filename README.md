@@ -163,3 +163,15 @@ This repository is released under the MIT license. See [LICENSE](LICENSE) for ad
 * We used [Steffen Urban](https://github.com/urbste)'s [OpenImuCameraCalibrator](https://github.com/urbste/OpenImuCameraCalibrator/) for camera and IMU calibration.
 * The UMI gripper's core mechanism is adpated from [Push/Pull Gripper](https://www.thingiverse.com/thing:2204113) by [John Mulac](https://www.thingiverse.com/3dprintingworld/designs).
 * UMI's soft finger is adapted from [Alex Alspach](http://alexalspach.com/)'s original design at TRI.
+
+fdasrsf==2.3.6
+gym==0.21.0
+hydra-core==1.2.0
+gmpy2==2.1.5
+imagecodecs==2023.9.18
+opencv-python==4.7.0
+pandas==2.1.4
+SciPy==1.11.4
+yarl==1.15.3
+robomimic==0.2.0
+robosuite==1.2.0

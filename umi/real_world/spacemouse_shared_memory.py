@@ -36,6 +36,7 @@ class Spacemouse(mp.Process):
             deadzone = np.array(deadzone, dtype=dtype)
         assert (deadzone >= 0).all()
 
+        
         # copied variables
         self.frequency = frequency
         self.max_value = max_value
@@ -57,6 +58,7 @@ class Spacemouse(mp.Process):
             'button_state': np.zeros((n_buttons,), dtype=bool),
             'receive_timestamp': time.time()
         }
+        
         ring_buffer = SharedMemoryRingBuffer.create_from_examples(
             shm_manager=shm_manager, 
             examples=example,
@@ -64,7 +66,6 @@ class Spacemouse(mp.Process):
             get_time_budget=0.2,
             put_desired_frequency=frequency
         )
-
         # shared variables
         self.ready_event = mp.Event()
         self.stop_event = mp.Event()

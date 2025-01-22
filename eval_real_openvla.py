@@ -59,6 +59,16 @@ from umi.real_world.real_inference_util import (get_real_obs_dict,
 from umi.real_world.spacemouse_shared_memory import Spacemouse
 from umi.common.pose_util import pose_to_mat, mat_to_pose
 
+import requests
+import json_numpy
+json_numpy.patch()
+import numpy as np
+import json
+import random
+from PIL import Image
+from pathlib import Path
+import cv2
+
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
 def solve_table_collision(ee_pose, gripper_width, height_threshold):
@@ -115,7 +125,7 @@ def solve_sphere_collision(ee_poses, robots_config):
 @click.option('--camera_reorder', '-cr', default='0')
 @click.option('--vis_camera_idx', default=0, type=int, help="Which RealSense camera to visualize.")
 @click.option('--init_joints', '-j', is_flag=True, default=False, help="Whether to initialize robot joint configuration in the beginning.")
-@click.option('--steps_per_inference', '-si', default=6, type=int, help="Action horizon for inference.")
+@click.option('--steps_per_inference', '-si', default=1, type=int, help="Action horizon for inference.")
 @click.option('--max_duration', '-md', default=2000000, help='Max duration for each epoch in seconds.')
 @click.option('--frequency', '-f', default=3, type=float, help="Control frequency in Hz.")
 @click.option('--command_latency', '-cl', default=0.01, type=float, help="Latency between receiving SapceMouse command to executing on Robot in Sec.")
@@ -131,7 +141,7 @@ def main(input, output, robot_config,
     frequency, command_latency, 
     no_mirror, sim_fov, camera_intrinsics, mirror_swap):
     max_gripper_width = 0.077
-    gripper_speed = 0.2
+    gripper_speed = 0.05
     
     # load robot config file
     robot_config_data = yaml.safe_load(open(os.path.expanduser(robot_config), 'r'))
@@ -196,7 +206,7 @@ def main(input, output, robot_config,
                 fisheye_converter=fisheye_converter,
                 mirror_swap=mirror_swap,
                 # action
-                max_pos_speed=0.1,
+                max_pos_speed=0.2,
                 max_rot_speed=6.0,
                 shm_manager=shm_manager) as env:
             cv2.setNumThreads(2)
@@ -233,10 +243,10 @@ def main(input, output, robot_config,
             workspace: BaseWorkspace
             workspace.load_payload(payload, exclude_keys=None, include_keys=None)
 
-            policy = workspace.model
-            if cfg.training.use_ema:
-                policy = workspace.ema_model
-            policy.num_inference_steps = 16 # DDIM inference iterations
+            #policy = workspace.model
+            #if cfg.training.use_ema:
+            #    policy = workspace.ema_model
+            #policy.num_inference_steps = 16 # DDIM inference iterations
             obs_pose_rep = cfg.task.pose_repr.obs_pose_repr
             action_pose_repr = cfg.task.pose_repr.action_pose_repr
             print('obs_pose_rep', obs_pose_rep)
@@ -244,7 +254,7 @@ def main(input, output, robot_config,
 
 
             device = torch.device('cuda')
-            policy.eval().to(device)
+            #policy.eval().to(device)
 
             print("Warming up policy inference")
             obs = env.get_obs()
@@ -258,20 +268,28 @@ def main(input, output, robot_config,
                 episode_start_pose.append(pose)
             print(episode_start_pose)
             with torch.no_grad():
-                policy.reset()
-                obs_dict_np = get_real_umi_obs_dict(
-                    env_obs=obs, shape_meta=cfg.task.shape_meta, 
-                    obs_pose_repr=obs_pose_rep,
-                    tx_robot1_robot0=tx_robot1_robot0,
-                    episode_start_pose=episode_start_pose)
-                obs_dict = dict_apply(obs_dict_np, 
-                    lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
-                result = policy.predict_action(obs_dict)
-                action = result['action_pred'][0].detach().to('cpu').numpy()
+                #policy.reset()
+                #obs_dict_np = get_real_umi_obs_dict(
+                #    env_obs=obs, shape_meta=cfg.task.shape_meta, 
+                #    obs_pose_repr=obs_pose_rep,
+                #    tx_robot1_robot0=tx_robot1_robot0,
+                #    episode_start_pose=episode_start_pose)
+                #obs_dict = dict_apply(obs_dict_np, 
+                #    lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
+                #result = policy.predict_action(obs_dict)
+                resized_image = np.array(obs["camera0_rgb"][0] * 255, dtype=np.uint8)
+                #import matplotlib.pyplot as plt
+                #plt.imshow(resized_image); plt.show()
+                action = requests.post(
+                "http://163.220.51.92:8000/act",
+                json={"image": resized_image, "instruction": "do something", "unnorm_key": "umi_dataset"}
+                ).json()
+                #action = result['action_pred'][0].detach().to('cpu').numpy()
                 assert action.shape[-1] == 10 * len(robots_config)
                 action = get_real_umi_action(action, obs, action_pose_repr)
+                action = np.array([action])
                 assert action.shape[-1] == 7 * len(robots_config)
-                del result
+                #del result
 
             print('Ready!')
             while True:
@@ -455,7 +473,7 @@ def main(input, output, robot_config,
                 # ========== policy control loop ==============
                 try:
                     # start episode
-                    policy.reset()
+                    #policy.reset()
                     start_delay = 1.0
                     eval_t_start = time.time() + start_delay
                     t_start = time.monotonic() + start_delay
@@ -490,21 +508,26 @@ def main(input, output, robot_config,
                         # run inference
                         with torch.no_grad():
                             s = time.time()
-                            print(obs["camera0_rgb"][0].shape)
-                            obs_dict_np = get_real_umi_obs_dict(
-                                env_obs=obs, shape_meta=cfg.task.shape_meta, 
-                                obs_pose_repr=obs_pose_rep,
-                                tx_robot1_robot0=tx_robot1_robot0,
-                                episode_start_pose=episode_start_pose)
-                            #print(obs_dict_np)
-                            obs_dict = dict_apply(obs_dict_np, 
-                                lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
-                            result = policy.predict_action(obs_dict)
-                            raw_action = result['action_pred'][0].detach().to('cpu').numpy()
-                            #print(raw_action.shape)
-                            #print(obs)
-                            #print(action_pose_repr)
+                            #obs_dict_np = get_real_umi_obs_dict(
+                            #    env_obs=obs, shape_meta=cfg.task.shape_meta, 
+                            #    obs_pose_repr=obs_pose_rep,
+                            #    tx_robot1_robot0=tx_robot1_robot0,
+                            #    episode_start_pose=episode_start_pose)
+                            #obs_dict = dict_apply(obs_dict_np, 
+                            #    lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
+                            #result = policy.predict_action(obs_dict)
+                            #print(obs["camera0_rgb"][0])
+                            resized_image = np.array(obs["camera0_rgb"][0] * 255, dtype=np.uint8)
+                            #import matplotlib.pyplot as plt
+                            #plt.show(resized_image); plt.show()
+                            raw_action = requests.post(
+                            "http://163.220.51.92:8000/act",
+                            json={"image": resized_image, "instruction": "do something", "unnorm_key": "umi_dataset"}
+                            ).json()
+                            #raw_action = result['action_pred'][0].detach().to('cpu').numpy()
                             action = get_real_umi_action(raw_action, obs, action_pose_repr)
+                            action = np.array([action])
+                            print(action)
                             print('Inference latency:', time.time() - s)
                         
                         # convert policy action to env actions

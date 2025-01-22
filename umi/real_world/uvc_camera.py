@@ -205,7 +205,9 @@ class UvcCamera(mp.Process):
         cv2.setNumThreads(self.num_threads)
 
         # open VideoCapture
+        print(self.dev_video_path)
         cap = cv2.VideoCapture(self.dev_video_path, cv2.CAP_V4L2)
+        #cap = cv2.VideoCapture(self.dev_video_path)
         
         try:
             # set resolution and fps
@@ -216,12 +218,14 @@ class UvcCamera(mp.Process):
             # set fps
             cap.set(cv2.CAP_PROP_BUFFERSIZE, self.cap_buffer_size)
             cap.set(cv2.CAP_PROP_FPS, fps)
+            #print(w,h,self.cap_buffer_size,fps)
 
             # put frequency regulation
             put_idx = None
             put_start_time = self.put_start_time
             if put_start_time is None:
                 put_start_time = time.time()
+            
 
             # reuse frame buffer
             iter_idx = 0
@@ -233,17 +237,21 @@ class UvcCamera(mp.Process):
                 
                 # directly write into shared memory to avoid copy
                 frame = self.video_recorder.get_img_buffer()
-                ret, frame = cap.retrieve(frame)
+                #ret, frame = cap.retrieve(frame)
+                ret, frame = cap.retrieve()
+                #print(frame)
+                #print(np.max(frame), np.min(frame))
                 t_recv = time.time()
                 assert ret
                 mt_cap = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+                
                 t_cap = mt_cap - time.monotonic() + time.time()
                 t_cal = t_recv - self.receive_latency # calibrated latency
-                     
+                
                 # record frame
                 if self.video_recorder.is_ready():
                     self.video_recorder.write_img_buffer(frame, frame_time=t_cal)
-
+                
                 data = dict()
                 data['camera_receive_timestamp'] = t_recv
                 data['camera_capture_timestamp'] = t_cap
@@ -253,7 +261,7 @@ class UvcCamera(mp.Process):
                 put_data = data
                 if self.transform is not None:
                     put_data = self.transform(dict(data))
-
+                #print(np.max(put_data["color"]), np.min(put_data["color"]))
                 if self.put_downsample:                
                     # put frequency regulation
                     local_idxs, global_idxs, put_idx \
@@ -278,7 +286,7 @@ class UvcCamera(mp.Process):
                     put_data['step_idx'] = step_idx
                     put_data['timestamp'] = t_cal
                     self.ring_buffer.put(put_data, wait=False)
-
+                
                 # signal ready
                 if iter_idx == 0:
                     self.ready_event.set()
@@ -298,7 +306,6 @@ class UvcCamera(mp.Process):
                 t_start = t_end
                 if self.verbose:
                     print(f'[UvcCamera {self.dev_video_path}] FPS {frequency}')
-
 
                 # fetch command from queue
                 try:

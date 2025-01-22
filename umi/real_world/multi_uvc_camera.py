@@ -51,6 +51,7 @@ class MultiUvcCamera:
             video_recorder, n_cameras, VideoRecorder)
         
         cameras = dict()
+        #print(dev_video_paths)
         for i, path in enumerate(dev_video_paths):
             cameras[path] = UvcCamera(
                 shm_manager=shm_manager,

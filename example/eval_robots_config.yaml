@@ -4,11 +4,11 @@
   "robots": [
     {
       "robot_type": "ur5e",
-      "robot_ip": "192.168.0.8",
-      "robot_obs_latency": 0.0001, "robot_action_latency": 0.1, "tcp_offset": 0.235,
+      "robot_ip": "163.220.51.93",
+      "robot_obs_latency": 0.0001, "robot_action_latency": 0.1, "tcp_offset": 0.210,
       # table height for finger-table collision avoidance
       # -inf to disable
-      "height_threshold": -0.024,
+      "height_threshold": -0.004,
       # sphere collision primitive size and location for inter-gripper collision avoidance
       # 0 to disable
       "sphere_radius": 0.1, "sphere_center": [0, -0.06, -0.185]
@@ -24,7 +24,7 @@
   # gripper configurations, 0->right 1->left
   "grippers": [
     {
-      "gripper_ip": "192.168.0.18",
+      "gripper_ip": "163.220.51.93",
       "gripper_port": 1000, "gripper_obs_latency": 0.01, "gripper_action_latency": 0.1
     },
     # {

@@ -7,6 +7,7 @@ import math
 from multiprocessing.managers import SharedMemoryManager
 from umi.real_world.rtde_interpolation_controller import RTDEInterpolationController
 from umi.real_world.wsg_controller import WSGController
+from umi.real_world.dxl_controller import DXLController
 from umi.real_world.franka_interpolation_controller import FrankaInterpolationController
 from umi.real_world.multi_uvc_camera import MultiUvcCamera, VideoRecorder
 from diffusion_policy.common.timestamp_accumulator import (
@@ -79,6 +80,7 @@ class BimanualUmiEnv:
         # Wait for all v4l cameras to be back online
         time.sleep(0.1)
         v4l_paths = get_sorted_v4l_paths()
+        v4l_paths = v4l_paths[1:]
         if camera_reorder is not None:
             paths = [v4l_paths[i] for i in camera_reorder]
             v4l_paths = paths
@@ -133,10 +135,13 @@ class BimanualUmiEnv:
                 
                 def tf(data, input_res=res):
                     img = data['color']
+                    #import matplotlib.pyplot as plt
+                    #plt.imshow(img); plt.show()
                     if fisheye_converter is None:
                         f = get_image_transform(
                             input_res=input_res,
-                            output_res=obs_image_resolution, 
+                            #output_res=obs_image_resolution, 
+                            output_res=(480,270), 
                             # obs output rgb
                             bgr_to_rgb=True)
                         img = np.ascontiguousarray(f(img))
@@ -171,9 +176,9 @@ class BimanualUmiEnv:
                 )
                 img = f(img)
                 data['color'] = img
+                #print(np.max(img), np.min(img))
                 return data
             vis_transform.append(vis_tf)
-
         camera = MultiUvcCamera(
             dev_video_paths=v4l_paths,
             shm_manager=shm_manager,
@@ -186,11 +191,12 @@ class BimanualUmiEnv:
             receive_latency=camera_obs_latency,
             cap_buffer_size=cap_buffer_size,
             transform=transform,
+            #transform=None,
             vis_transform=vis_transform,
             video_recorder=video_recorder,
             verbose=False
         )
-
+        
         multi_cam_vis = None
         if enable_multi_cam_vis:
             multi_cam_vis = MultiCameraVisualizer(
@@ -199,15 +205,14 @@ class BimanualUmiEnv:
                 col=col,
                 rgb_to_bgr=False
             )
-
         cube_diag = np.linalg.norm([1,1,1])
         j_init = np.array([0,-90,-90,-90,90,0]) / 180 * np.pi
         if not init_joints:
             j_init = None
-
         assert len(robots_config) == len(grippers_config)
         robots: List[RTDEInterpolationController] = list()
-        grippers: List[WSGController] = list()
+        #grippers: List[WSGController] = list()
+        grippers: List[DXLController] = list()
         for rc in robots_config:
             if rc['robot_type'].startswith('ur5'):
                 assert rc['robot_type'] in ['ur5', 'ur5e']
@@ -243,14 +248,15 @@ class BimanualUmiEnv:
             else:
                 raise NotImplementedError()
             robots.append(this_robot)
-
+        
         for gc in grippers_config:
-            this_gripper = WSGController(
+            #this_gripper = WSGController(
+            this_gripper = DXLController(
                 shm_manager=shm_manager,
                 hostname=gc['gripper_ip'],
                 port=gc['gripper_port'],
                 receive_latency=gc['gripper_obs_latency'],
-                use_meters=True
+                use_meters=False
             )
 
             grippers.append(this_gripper)
@@ -287,6 +293,7 @@ class BimanualUmiEnv:
 
         self.start_time = None
         self.last_time_step = 0
+        
     
     # ======== start-stop API =============
     @property

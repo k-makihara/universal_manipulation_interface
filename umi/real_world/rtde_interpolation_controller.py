@@ -184,16 +184,18 @@ class RTDEInterpolationController(mp.Process):
         """
         duration: desired time to reach pose
         """
+        #print("ccc")
         assert self.is_alive()
         assert(duration >= (1/self.frequency))
         pose = np.array(pose)
         assert pose.shape == (6,)
-
+        #print(pose)
         message = {
             'cmd': Command.SERVOL.value,
             'target_pose': pose,
             'duration': duration
         }
+        #print(message)
         self.input_queue.put(message)
     
     def schedule_waypoint(self, pose, target_time):
@@ -251,12 +253,15 @@ class RTDEInterpolationController(mp.Process):
             curr_pose = rtde_r.getActualTCPPose()
             # use monotonic time to make sure the control loop never go backward
             curr_t = time.monotonic()
+            #print(curr_t)
+            #print(curr_pose)
             last_waypoint_time = curr_t
             pose_interp = PoseTrajectoryInterpolator(
                 times=[curr_t],
                 poses=[curr_pose]
             )
-            
+            #print(pose_interp)
+            #print("-----")
             t_start = time.monotonic()
             iter_idx = 0
             keep_running = True
@@ -266,10 +271,12 @@ class RTDEInterpolationController(mp.Process):
 
                 # send command to robot
                 t_now = time.monotonic()
+                #print(t_now)
                 # diff = t_now - pose_interp.times[-1]
                 # if diff > 0:
                 #     print('extrapolate', diff)
                 pose_command = pose_interp(t_now)
+                #print(pose_command)
                 vel = 0.5
                 acc = 0.5
                 assert rtde_c.servoL(pose_command, 
@@ -277,6 +284,7 @@ class RTDEInterpolationController(mp.Process):
                     dt, 
                     self.lookahead_time, 
                     self.gain)
+                #self.servoL(pose_command)
                 
                 # update robot state
                 state = dict()
@@ -289,11 +297,14 @@ class RTDEInterpolationController(mp.Process):
 
                 # fetch command from queue
                 try:
-                    # commands = self.input_queue.get_all()
-                    # n_cmd = len(commands['cmd'])
+                    #commands = self.input_queue.get_all()
+                    #n_cmd = len(commands['cmd'])
+                    #print(commands['cmd'])
                     # process at most 1 command per cycle to maintain frequency
                     commands = self.input_queue.get_k(1)
                     n_cmd = len(commands['cmd'])
+                    #print(commands['cmd'])
+    
                 except Empty:
                     n_cmd = 0
 
@@ -303,6 +314,7 @@ class RTDEInterpolationController(mp.Process):
                     for key, value in commands.items():
                         command[key] = value[i]
                     cmd = command['cmd']
+                    #print(cmd)
 
                     if cmd == Command.STOP.value:
                         keep_running = False
